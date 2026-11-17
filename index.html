@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>80/20 Zone & Interval Monitor</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #1e293b;
+      --card-alt: #0b1120;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --z1: #64748b;
+      --z2: #22c55e;
+      --z3: #eab308;
+      --z4: #f97316;
+      --z5: #ef4444;
+      --accent: #38bdf8;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      padding: 14px;
+      gap: 12px;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .status {
+      font-size: 0.85rem;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #ef4444;
+    }
+    .dot.connected { background: #22c55e; }
+
+    .btn-row { display: flex; gap: 6px; }
+
+    button {
+      background: var(--card);
+      color: var(--text);
+      border: 1px solid #334155;
+      padding: 9px 12px;
+      border-radius: 10px;
+      font-weight: 600;
+      font-size: 0.85rem;
+      cursor: pointer;
+    }
+    button:active { transform: scale(0.98); }
+    button.primary { background: var(--accent); color: #0f172a; border: none; }
+    button.active-tab { background: #0284c7; border-color: var(--accent); color: #fff; }
+    button.small-btn { padding: 6px 8px; font-size: 0.76rem; }
+
+    .mode-tabs {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .mode-tabs button {
+      padding: 12px 8px;
+      font-size: 0.92rem;
+    }
+
+    .hero {
+      background: var(--card);
+      border-radius: 20px;
+      padding: 20px 14px;
+      text-align: center;
+      border: 3px solid var(--z1);
+      transition: border-color 0.25s ease;
+    }
+
+    .zone-label {
+      font-size: 1.05rem;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .bpm-display {
+      font-size: 5.8rem;
+      font-weight: 900;
+      line-height: 1;
+      font-variant-numeric: tabular-nums;
+      margin: 4px 0;
+    }
+
+    .bpm-sub {
+      font-size: 0.9rem;
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    .alert-banner {
+      margin-top: 10px;
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-weight: 700;
+      font-size: 0.92rem;
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    .card {
+      background: var(--card);
+      border-radius: 16px;
+      padding: 14px;
+    }
+
+    .card-title {
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      margin-bottom: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    /* Interval Timer Panel */
+    .hidden { display: none !important; }
+
+    .interval-display {
+      background: var(--card-alt);
+      border-radius: 14px;
+      padding: 14px;
+      text-align: center;
+      margin-bottom: 12px;
+      border: 2px solid #334155;
+    }
+    .interval-display.work-phase { border-color: var(--z4); }
+    .interval-display.rest-phase { border-color: var(--z2); }
+
+    .phase-badge {
+      font-size: 0.85rem;
+      font-weight: 800;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+    .phase-timer {
+      font-size: 3.2rem;
+      font-weight: 900;
+      font-variant-numeric: tabular-nums;
+      line-height: 1.1;
+      margin: 4px 0;
+    }
+    .round-info {
+      font-size: 0.85rem;
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    .preset-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .custom-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .input-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-size: 0.75rem;
+      color: var(--muted);
+    }
+    .input-group input {
+      width: 100%;
+      background: var(--card-alt);
+      border: 1px solid #334155;
+      color: var(--text);
+      padding: 8px;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      font-weight: 700;
+      text-align: center;
+    }
+
+    .interval-controls {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 8px;
+    }
+
+    /* Sound Test Bar */
+    .sound-test-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+      margin-top: 8px;
+    }
+
+    /* Time in Zone Bars */
+    .zone-bar-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 7px;
+      font-size: 0.82rem;
+      font-variant-numeric: tabular-nums;
+    }
+    .zone-bar-label { width: 105px; font-weight: 600; }
+    .bar-track {
+      flex: 1;
+      height: 10px;
+      background: var(--card-alt);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .bar-fill { height: 100%; width: 0%; transition: width 0.4s ease; }
+    .zone-time { width: 76px; text-align: right; color: var(--muted); }
+
+    .controls-footer {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+      margin-top: auto;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div class="status">
+      <span class="dot" id="statusDot"></span>
+      <span id="statusText">Disconnected</span>
+    </div>
+    <div class="btn-row">
+      <button id="simBtn" class="small-btn">Simulate</button>
+      <button class="primary small-btn" id="connectBtn">Connect Strap</button>
+    </div>
+  </div>
+
+  <!-- Workout Mode Selector -->
+  <div class="mode-tabs">
+    <button class="active-tab" id="tabZ2">1. Strict Zone 2<br><small>120 – 132 BPM</small></button>
+    <button id="tabZ4">2. Zone 4 Intervals<br><small>145 – 155 BPM</small></button>
+  </div>
+
+  <!-- Live BPM Card -->
+  <div class="hero" id="heroCard">
+    <div class="zone-label" id="zoneName">READY</div>
+    <div class="bpm-display" id="bpmValue">--</div>
+    <div class="bpm-sub" id="zoneRangeText">Target: 120 – 132 BPM (Stay in Zone 2)</div>
+    <div class="alert-banner" id="alertBanner">Pair Coospo H6M or tap Simulate</div>
+  </div>
+
+  <!-- Zone 4 Interval Timer Card (Visible in Zone 4 Mode) -->
+  <div class="card hidden" id="intervalCard">
+    <div class="card-title">
+      <span>Interval Timer</span>
+      <span>Presets & Custom</span>
+    </div>
+
+    <div class="interval-display" id="intervalBox">
+      <div class="phase-badge" id="phaseLabel">READY TO START</div>
+      <div class="phase-timer" id="phaseTimer">00:15</div>
+      <div class="round-info" id="roundLabel">Round 1 of 8</div>
+    </div>
+
+    <div class="preset-row">
+      <button class="small-btn" id="presetSprint">⚡ 15s / 45s Sprints (8x)</button>
+      <button class="small-btn" id="preset4x4">🔥 4x4 Threshold (4m / 3m)</button>
+    </div>
+
+    <div class="custom-grid">
+      <div class="input-group">
+        <label for="workSecInput">Work (sec)</label>
+        <input type="number" id="workSecInput" value="15" min="5" max="3600" />
+      </div>
+      <div class="input-group">
+        <label for="restSecInput">Rest (sec)</label>
+        <input type="number" id="restSecInput" value="45" min="5" max="3600" />
+      </div>
+      <div class="input-group">
+        <label for="roundsInput">Rounds</label>
+        <input type="number" id="roundsInput" value="8" min="1" max="50" />
+      </div>
+    </div>
+
+    <div class="interval-controls">
+      <button class="primary" id="startIntervalBtn">Start Intervals</button>
+      <button id="resetIntervalBtn">Reset Timer</button>
+    </div>
+  </div>
+
+  <!-- Audio & Alert Controls -->
+  <div class="card">
+    <div class="card-title">
+      <span>Single-Transition Audio Alerts</span>
+      <label style="display:flex;align-items:center;gap:5px;cursor:pointer;color:var(--text);">
+        <input type="checkbox" id="audioToggle" checked /> Enabled
+      </label>
+    </div>
+    <div class="sound-test-row">
+      <button class="small-btn" id="testLowBtn">🔊 Too Low</button>
+      <button class="small-btn" id="testInBtn">🔊 In Zone</button>
+      <button class="small-btn" id="testHighBtn">🔊 Too High</button>
+    </div>
+  </div>
+
+  <!-- Time in Zone Breakdown -->
+  <div class="card">
+    <div class="card-title">
+      <span>Time in Zone</span>
+      <span id="totalElapsed">Total: 00:00</span>
+    </div>
+    <div id="zoneBars"></div>
+  </div>
+
+  <div class="controls-footer">
+    <button id="pauseBtn">Pause HR</button>
+    <button id="resetBtn">Reset Stats</button>
+    <button id="exportBtn">Export CSV</button>
+  </div>
+
+  <script>
+    // Calibrated 5-Zone Configuration
+    const ZONES = [
+      { id: 1, name: 'Zone 1 · Easy',      min: 0,   max: 119, color: 'var(--z1)' },
+      { id: 2, name: 'Zone 2 · Base',      min: 120, max: 132, color: 'var(--z2)' },
+      { id: 3, name: 'Zone 3 · Tempo',     min: 133, max: 144, color: 'var(--z3)' },
+      { id: 4, name: 'Zone 4 · Threshold', min: 145, max: 155, color: 'var(--z4)' },
+      { id: 5, name: 'Zone 5 · Peak',      min: 156, max: 220, color: 'var(--z5)' }
+    ];
+
+    let workoutMode = 'Z2'; // 'Z2' or 'Z4'
+    let currentBpm = null;
+    let isPaused = false;
+    let zoneSeconds = [0, 0, 0, 0, 0];
+    let logHistory = [];
+    let audioCtx = null;
+    let simInterval = null;
+    let wakeLock = null;
+
+    // Track state transitions so each alert fires ONCE per crossing
+    // States: 'UNKNOWN' | 'SILENT_SYNC' | 'LOW' | 'IN_ZONE' | 'HIGH'
+    let currentZoneState = 'UNKNOWN';
+
+    // Interval State
+    let intervalRunning = false;
+    let intervalPhase = 'IDLE'; // 'IDLE', 'WORK', 'REST', 'DONE'
+    let currentRound = 1;
+    let phaseRemaining = 15;
+    let intervalTick = null;
+
+    // Build Time-in-Zone Bars
+    const zoneBarsEl = document.getElementById('zoneBars');
+    ZONES.forEach((z, idx) => {
+      const rangeLabel = z.id === 1 ? '<120' : z.id === 5 ? '156+' : `${z.min}-${z.max}`;
+      zoneBarsEl.innerHTML += `
+        <div class="zone-bar-row">
+          <div class="zone-bar-label" style="color:${z.color}">Z${z.id} (${rangeLabel})</div>
+          <div class="bar-track"><div class="bar-fill" id="bar-${idx}" style="background:${z.color}"></div></div>
+          <div class="zone-time" id="time-${idx}">00:00 (0%)</div>
+        </div>
+      `;
+    });
+
+    function formatTime(sec) {
+      const m = Math.floor(sec / 60).toString().padStart(2, '0');
+      const s = (sec % 60).toString().padStart(2, '0');
+      return `${m}:${s}`;
+    }
+
+    function getZone(bpm) {
+      return ZONES.find(z => bpm >= z.min && bpm <= z.max) || ZONES[0];
+    }
+
+    // Distinct Web Audio Synthesizer
+    function ensureAudio() {
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+    }
+
+    function playTone(freq, startOffset, duration, type = 'sine', gainVal = 0.28) {
+      ensureAudio();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = type;
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(gainVal, audioCtx.currentTime + startOffset);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + startOffset + duration);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start(audioCtx.currentTime + startOffset);
+      osc.stop(audioCtx.currentTime + startOffset + duration);
+    }
+
+    function playSoundType(kind) {
+      try {
+        if (kind === 'HIGH') {
+          // 1. Urgent rising double-chirp (ease off)
+          playTone(988, 0, 0.14, 'triangle', 0.3);
+          playTone(1318, 0.17, 0.22, 'triangle', 0.32);
+          if (navigator.vibrate) navigator.vibrate([180, 90, 180]);
+        } else if (kind === 'LOW') {
+          // 2. Deep falling double-boop (pick up pace)
+          playTone(330, 0, 0.22, 'sine', 0.35);
+          playTone(262, 0.25, 0.32, 'sine', 0.35);
+          if (navigator.vibrate) navigator.vibrate([450]);
+        } else if (kind === 'IN_ZONE') {
+          // 3. Clean harmonic confirmation chime (back in target zone)
+          playTone(587.33, 0, 0.14, 'sine', 0.28);     // D5
+          playTone(880.00, 0.14, 0.28, 'sine', 0.30);  // A5
+          if (navigator.vibrate) navigator.vibrate([110]);
+        } else if (kind === 'COUNTDOWN') {
+          playTone(660, 0, 0.1, 'sine', 0.22);
+        } else if (kind === 'WORK_START') {
+          playTone(523, 0, 0.12, 'triangle', 0.32);
+          playTone(659, 0.13, 0.12, 'triangle', 0.32);
+          playTone(1046, 0.26, 0.28, 'triangle', 0.35);
+          if (navigator.vibrate) navigator.vibrate([300, 100, 300]);
+        } else if (kind === 'REST_START') {
+          playTone(784, 0, 0.18, 'sine', 0.3);
+          playTone(523, 0.2, 0.35, 'sine', 0.3);
+          if (navigator.vibrate) navigator.vibrate([500]);
+        }
+      } catch (e) {}
+    }
+
+    // Test Sound Buttons
+    document.getElementById('testLowBtn').addEventListener('click', () => playSoundType('LOW'));
+    document.getElementById('testInBtn').addEventListener('click', () => playSoundType('IN_ZONE'));
+    document.getElementById('testHighBtn').addEventListener('click', () => playSoundType('HIGH'));
+
+    function getActiveBounds() {
+      if (workoutMode === 'Z2') {
+        return { min: 120, max: 132, checkLow: true, checkHigh: true, label: 'Target: 120 – 132 BPM (Strict Zone 2)' };
+      }
+      // Zone 4 Interval Mode
+      if (intervalRunning && intervalPhase === 'REST') {
+        return { min: 0, max: 132, checkLow: false, checkHigh: true, label: 'REST: Recover below 132 BPM' };
+      }
+      return { min: 145, max: 155, checkLow: true, checkHigh: true, label: 'WORK TARGET: 145 – 155 BPM (Zone 4)' };
+    }
+
+    function updateUI(bpm) {
+      currentBpm = bpm;
+      const zone = getZone(bpm);
+      const bounds = getActiveBounds();
+
+      document.getElementById('bpmValue').textContent = bpm;
+      document.getElementById('zoneName').textContent = zone.name;
+      document.getElementById('zoneName').style.color = zone.color;
+      document.getElementById('heroCard').style.borderColor = zone.color;
+      document.getElementById('zoneRangeText').textContent = bounds.label;
+
+      // Determine new state
+      let newState = 'IN_ZONE';
+      if (bounds.checkHigh && bpm > bounds.max) {
+        newState = 'HIGH';
+      } else if (bounds.checkLow && bpm < bounds.min) {
+        newState = 'LOW';
+      }
+
+      // Update Banner Text
+      const banner = document.getElementById('alertBanner');
+      if (newState === 'HIGH') {
+        banner.textContent = `▲ TOO HIGH (>${bounds.max} BPM) — EASE OFF`;
+        banner.style.color = '#fca5a5';
+      } else if (newState === 'LOW') {
+        banner.textContent = `▼ TOO LOW (<${bounds.min} BPM) — PICK UP PACE`;
+        banner.style.color = '#93c5fd';
+      } else {
+        banner.textContent = intervalPhase === 'REST' ? '✓ RECOVERING' : '✓ IN TARGET ZONE';
+        banner.style.color = '#86efac';
+      }
+
+      // Fire sound ONLY when state changes
+      if (currentZoneState === 'SILENT_SYNC') {
+        // Silently absorb baseline state right after an interval phase chime
+        currentZoneState = newState;
+      } else if (newState !== currentZoneState) {
+        currentZoneState = newState;
+        if (document.getElementById('audioToggle').checked) {
+          playSoundType(newState);
+        }
+      }
+    }
+
+    // Mode Tab Switching
+    document.getElementById('tabZ2').addEventListener('click', () => {
+      workoutMode = 'Z2';
+      document.getElementById('tabZ2').classList.add('active-tab');
+      document.getElementById('tabZ4').classList.remove('active-tab');
+      document.getElementById('intervalCard').classList.add('hidden');
+      currentZoneState = 'UNKNOWN';
+      document.getElementById('zoneRangeText').textContent = 'Target: 120 – 132 BPM (Strict Zone 2)';
+      if (currentBpm !== null) updateUI(currentBpm);
+    });
+
+    document.getElementById('tabZ4').addEventListener('click', () => {
+      workoutMode = 'Z4';
+      document.getElementById('tabZ4').classList.add('active-tab');
+      document.getElementById('tabZ2').classList.remove('active-tab');
+      document.getElementById('intervalCard').classList.remove('hidden');
+      currentZoneState = 'UNKNOWN';
+      document.getElementById('zoneRangeText').textContent = 'WORK TARGET: 145 – 155 BPM (Zone 4)';
+      if (currentBpm !== null) updateUI(currentBpm);
+    });
+
+    // Interval Timer Logic
+    function syncIntervalDisplay() {
+      const workSec = parseInt(document.getElementById('workSecInput').value, 10) || 15;
+      const totalRounds = parseInt(document.getElementById('roundsInput').value, 10) || 8;
+      const box = document.getElementById('intervalBox');
+      box.classList.remove('work-phase', 'rest-phase');
+
+      if (intervalPhase === 'IDLE') {
+        document.getElementById('phaseLabel').textContent = 'READY TO START';
+        document.getElementById('phaseLabel').style.color = 'var(--muted)';
+        document.getElementById('phaseTimer').textContent = formatTime(workSec);
+        document.getElementById('roundLabel').textContent = `Round 1 of ${totalRounds}`;
+      } else if (intervalPhase === 'WORK') {
+        box.classList.add('work-phase');
+        document.getElementById('phaseLabel').textContent = '🔥 WORK — PUSH TO ZONE 4';
+        document.getElementById('phaseLabel').style.color = 'var(--z4)';
+        document.getElementById('phaseTimer').textContent = formatTime(phaseRemaining);
+        document.getElementById('roundLabel').textContent = `Round ${currentRound} of ${totalRounds}`;
+      } else if (intervalPhase === 'REST') {
+        box.classList.add('rest-phase');
+        document.getElementById('phaseLabel').textContent = '😮‍💨 REST — EASY RECOVERY';
+        document.getElementById('phaseLabel').style.color = 'var(--z2)';
+        document.getElementById('phaseTimer').textContent = formatTime(phaseRemaining);
+        document.getElementById('roundLabel').textContent = `Round ${currentRound} of ${totalRounds}`;
+      } else if (intervalPhase === 'DONE') {
+        document.getElementById('phaseLabel').textContent = '🏁 INTERVALS COMPLETE';
+        document.getElementById('phaseLabel').style.color = 'var(--accent)';
+        document.getElementById('phaseTimer').textContent = '00:00';
+        document.getElementById('roundLabel').textContent = `Completed ${totalRounds} Rounds`;
+      }
+    }
+
+    function resetIntervalTimer() {
+      clearInterval(intervalTick);
+      intervalTick = null;
+      intervalRunning = false;
+      intervalPhase = 'IDLE';
+      currentRound = 1;
+      currentZoneState = 'UNKNOWN';
+      document.getElementById('startIntervalBtn').textContent = 'Start Intervals';
+      syncIntervalDisplay();
+      if (currentBpm !== null) updateUI(currentBpm);
+    }
+
+    document.getElementById('presetSprint').addEventListener('click', () => {
+      document.getElementById('workSecInput').value = 15;
+      document.getElementById('restSecInput').value = 45;
+      document.getElementById('roundsInput').value = 8;
+      resetIntervalTimer();
+    });
+
+    document.getElementById('preset4x4').addEventListener('click', () => {
+      document.getElementById('workSecInput').value = 240; // 4 mins
+      document.getElementById('restSecInput').value = 180; // 3 mins
+      document.getElementById('roundsInput').value = 4;
+      resetIntervalTimer();
+    });
+
+    ['workSecInput', 'restSecInput', 'roundsInput'].forEach(id => {
+      document.getElementById(id).addEventListener('change', resetIntervalTimer);
+    });
+
+    document.getElementById('resetIntervalBtn').addEventListener('click', resetIntervalTimer);
+
+    document.getElementById('startIntervalBtn').addEventListener('click', () => {
+      ensureAudio();
+      if (intervalRunning) {
+        clearInterval(intervalTick);
+        intervalTick = null;
+        intervalRunning = false;
+        document.getElementById('startIntervalBtn').textContent = 'Resume Intervals';
+        return;
+      }
+
+      const workSec = parseInt(document.getElementById('workSecInput').value, 10) || 15;
+      const restSec = parseInt(document.getElementById('restSecInput').value, 10) || 45;
+      const totalRounds = parseInt(document.getElementById('roundsInput').value, 10) || 8;
+
+      if (intervalPhase === 'IDLE' || intervalPhase === 'DONE') {
+        currentRound = 1;
+        intervalPhase = 'WORK';
+        phaseRemaining = workSec;
+        currentZoneState = 'SILENT_SYNC';
+        if (document.getElementById('audioToggle').checked) playSoundType('WORK_START');
+      }
+
+      intervalRunning = true;
+      document.getElementById('startIntervalBtn').textContent = 'Pause Intervals';
+      syncIntervalDisplay();
+      if (currentBpm !== null) updateUI(currentBpm);
+
+      intervalTick = setInterval(() => {
+        phaseRemaining--;
+
+        // 3-2-1 countdown beeps before phase switch
+        if (phaseRemaining > 0 && phaseRemaining <= 3 && document.getElementById('audioToggle').checked) {
+          playSoundType('COUNTDOWN');
+        }
+
+        if (phaseRemaining <= 0) {
+          if (intervalPhase === 'WORK') {
+            if (currentRound >= totalRounds) {
+              intervalPhase = 'DONE';
+              intervalRunning = false;
+              clearInterval(intervalTick);
+              currentZoneState = 'SILENT_SYNC';
+              document.getElementById('startIntervalBtn').textContent = 'Start Intervals';
+              if (document.getElementById('audioToggle').checked) playSoundType('REST_START');
+            } else {
+              intervalPhase = 'REST';
+              phaseRemaining = restSec;
+              currentZoneState = 'SILENT_SYNC';
+              if (document.getElementById('audioToggle').checked) playSoundType('REST_START');
+            }
+          } else if (intervalPhase === 'REST') {
+            currentRound++;
+            intervalPhase = 'WORK';
+            phaseRemaining = workSec;
+            currentZoneState = 'SILENT_SYNC';
+            if (document.getElementById('audioToggle').checked) playSoundType('WORK_START');
+          }
+        }
+
+        syncIntervalDisplay();
+        if (currentBpm !== null) updateUI(currentBpm);
+      }, 1000);
+    });
+
+    // 1-second Time-in-Zone Accounting
+    setInterval(() => {
+      if (isPaused || currentBpm === null) return;
+      const zone = getZone(currentBpm);
+      zoneSeconds[zone.id - 1]++;
+      logHistory.push({
+        timestamp: new Date().toISOString(),
+        bpm: currentBpm,
+        zone: zone.id,
+        mode: workoutMode,
+        phase: intervalPhase
+      });
+
+      const total = zoneSeconds.reduce((a, b) => a + b, 0);
+      document.getElementById('totalElapsed').textContent = `Total: ${formatTime(total)}`;
+
+      zoneSeconds.forEach((sec, idx) => {
+        const pct = total > 0 ? Math.round((sec / total) * 100) : 0;
+        document.getElementById(`bar-${idx}`).style.width = `${pct}%`;
+        document.getElementById(`time-${idx}`).textContent = `${formatTime(sec)} (${pct}%)`;
+      });
+    }, 1000);
+
+    // Web Bluetooth Connection
+    async function connectStrap() {
+      ensureAudio();
+      if (!navigator.bluetooth) {
+        alert('Web Bluetooth requires Chrome over HTTPS or localhost.');
+        return;
+      }
+      try {
+        if (simInterval) {
+          clearInterval(simInterval);
+          simInterval = null;
+          document.getElementById('simBtn').textContent = 'Simulate';
+        }
+        const device = await navigator.bluetooth.requestDevice({
+          filters: [{ services: ['heart_rate'] }]
+        });
+
+        document.getElementById('statusText').textContent = 'Connecting...';
+        device.addEventListener('gattserverdisconnected', () => {
+          document.getElementById('statusDot').classList.remove('connected');
+          document.getElementById('statusText').textContent = 'Disconnected';
+        });
+
+        const server = await device.gatt.connect();
+        const service = await server.getPrimaryService('heart_rate');
+        const char = await service.getCharacteristic('heart_rate_measurement');
+
+        await char.startNotifications();
+        currentZoneState = 'UNKNOWN';
+        char.addEventListener('characteristicvaluechanged', (event) => {
+          const val = event.target.value;
+          const flags = val.getUint8(0);
+          const bpm = (flags & 0x01) ? val.getUint16(1, true) : val.getUint8(1);
+          updateUI(bpm);
+        });
+
+        document.getElementById('statusDot').classList.add('connected');
+        document.getElementById('statusText').textContent = device.name || 'Connected';
+
+        if ('wakeLock' in navigator) {
+          wakeLock = await navigator.wakeLock.request('screen').catch(() => null);
+        }
+      } catch (err) {
+        document.getElementById('statusText').textContent = 'Connection cancelled';
+      }
+    }
+
+    document.getElementById('connectBtn').addEventListener('click', connectStrap);
+
+    // Simulator Mode
+    document.getElementById('simBtn').addEventListener('click', () => {
+      ensureAudio();
+      if (simInterval) {
+        clearInterval(simInterval);
+        simInterval = null;
+        document.getElementById('simBtn').textContent = 'Simulate';
+        document.getElementById('statusDot').classList.remove('connected');
+        document.getElementById('statusText').textContent = 'Disconnected';
+        return;
+      }
+      document.getElementById('simBtn').textContent = 'Stop Sim';
+      document.getElementById('statusDot').classList.add('connected');
+      document.getElementById('statusText').textContent = 'Simulated Strap';
+      currentZoneState = 'UNKNOWN';
+      let simBpm = workoutMode === 'Z2' ? 117 : 142;
+      let dir = 1;
+      updateUI(simBpm);
+      simInterval = setInterval(() => {
+        if (isPaused) return;
+        simBpm += dir;
+        const ceiling = workoutMode === 'Z2' ? 135 : 158;
+        const floor = workoutMode === 'Z2' ? 117 : 142;
+        if (simBpm >= ceiling) dir = -1;
+        if (simBpm <= floor) dir = 1;
+        updateUI(simBpm);
+      }, 1000);
+    });
+
+    // Pause / Reset / CSV Export
+    document.getElementById('pauseBtn').addEventListener('click', (e) => {
+      isPaused = !isPaused;
+      e.target.textContent = isPaused ? 'Resume HR' : 'Pause HR';
+    });
+
+    document.getElementById('resetBtn').addEventListener('click', () => {
+      zoneSeconds = [0, 0, 0, 0, 0];
+      logHistory = [];
+      currentZoneState = 'UNKNOWN';
+      document.getElementById('totalElapsed').textContent = 'Total: 00:00';
+      zoneSeconds.forEach((_, idx) => {
+        document.getElementById(`bar-${idx}`).style.width = '0%';
+        document.getElementById(`time-${idx}`).textContent = '00:00 (0%)';
+      });
+    });
+
+    document.getElementById('exportBtn').addEventListener('click', () => {
+      if (logHistory.length === 0) {
+        alert('No workout data recorded yet.');
+        return;
+      }
+      const csv = 'timestamp,bpm,zone,workout_mode,interval_phase\n' +
+        logHistory.map(r => `${r.timestamp},${r.bpm},${r.zone},${r.mode},${r.phase}`).join('\n');
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `hr-workout-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+  </script>
+</body>
+</html>
