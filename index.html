@@ -137,7 +137,6 @@
       align-items: center;
     }
 
-    /* Interval Timer Panel */
     .hidden { display: none !important; }
 
     .interval-display {
@@ -208,7 +207,6 @@
       gap: 8px;
     }
 
-    /* Sound Test Bar */
     .sound-test-row {
       display: grid;
       grid-template-columns: repeat(3, 1fr);
@@ -216,7 +214,6 @@
       margin-top: 8px;
     }
 
-    /* Time in Zone Bars */
     .zone-bar-row {
       display: flex;
       align-items: center;
@@ -267,11 +264,11 @@
   <div class="hero" id="heroCard">
     <div class="zone-label" id="zoneName">READY</div>
     <div class="bpm-display" id="bpmValue">--</div>
-    <div class="bpm-sub" id="zoneRangeText">Target: 120 – 132 BPM (Stay in Zone 2)</div>
+    <div class="bpm-sub" id="zoneRangeText">Target: 120 – 132 BPM (Strict Zone 2)</div>
     <div class="alert-banner" id="alertBanner">Pair Coospo H6M or tap Simulate</div>
   </div>
 
-  <!-- Zone 4 Interval Timer Card (Visible in Zone 4 Mode) -->
+  <!-- Zone 4 Interval Timer Card -->
   <div class="card hidden" id="intervalCard">
     <div class="card-title">
       <span>Interval Timer</span>
@@ -313,7 +310,7 @@
   <!-- Audio & Alert Controls -->
   <div class="card">
     <div class="card-title">
-      <span>Single-Transition Audio Alerts</span>
+      <span>Pocket Audio Alerts (Works Locked)</span>
       <label style="display:flex;align-items:center;gap:5px;cursor:pointer;color:var(--text);">
         <input type="checkbox" id="audioToggle" checked /> Enabled
       </label>
@@ -358,14 +355,14 @@
     let audioCtx = null;
     let simInterval = null;
     let wakeLock = null;
+    let keepAliveAudio = null;
 
-    // Track state transitions so each alert fires ONCE per crossing
     // States: 'UNKNOWN' | 'SILENT_SYNC' | 'LOW' | 'IN_ZONE' | 'HIGH'
     let currentZoneState = 'UNKNOWN';
 
     // Interval State
     let intervalRunning = false;
-    let intervalPhase = 'IDLE'; // 'IDLE', 'WORK', 'REST', 'DONE'
+    let intervalPhase = 'IDLE';
     let currentRound = 1;
     let phaseRemaining = 15;
     let intervalTick = null;
@@ -393,6 +390,58 @@
       return ZONES.find(z => bpm >= z.min && bpm <= z.max) || ZONES[0];
     }
 
+    // Generate an in-memory 1-second silent WAV file so Android keeps audio & BLE alive while locked
+    function startBackgroundKeepAlive() {
+      try {
+        if (!keepAliveAudio) {
+          const sampleRate = 8000;
+          const numSamples = sampleRate; // 1 second
+          const buffer = new ArrayBuffer(44 + numSamples);
+          const view = new DataView(buffer);
+          const writeStr = (offset, str) => {
+            for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
+          };
+          writeStr(0, 'RIFF');
+          view.setUint32(4, 36 + numSamples, true);
+          writeStr(8, 'WAVE');
+          writeStr(12, 'fmt ');
+          view.setUint32(16, 16, true);
+          view.setUint16(20, 1, true); // PCM
+          view.setUint16(22, 1, true); // Mono
+          view.setUint32(24, sampleRate, true);
+          view.setUint32(28, sampleRate, true);
+          view.setUint16(32, 1, true);
+          view.setUint16(34, 8, true); // 8-bit
+          writeStr(36, 'data');
+          view.setUint32(40, numSamples, true);
+          for (let i = 0; i < numSamples; i++) view.setUint8(44 + i, 128); // 128 = silence in 8-bit PCM
+
+          const blob = new Blob([buffer], { type: 'audio/wav' });
+          keepAliveAudio = document.createElement('audio');
+          keepAliveAudio.src = URL.createObjectURL(blob);
+          keepAliveAudio.loop = true;
+          keepAliveAudio.playsInline = true;
+        }
+        keepAliveAudio.play().catch(() => {});
+
+        if ('mediaSession' in navigator) {
+          navigator.mediaSession.metadata = new MediaMetadata({
+            title: 'Waiting for Heart Rate...',
+            artist: '80/20 Zone Monitor',
+            album: workoutMode === 'Z2' ? 'Strict Zone 2 (120–132)' : 'Zone 4 Intervals (145–155)'
+          });
+          navigator.mediaSession.playbackState = 'playing';
+        }
+      } catch (e) {}
+    }
+
+    function updateLockScreenMetadata(bpm, zoneName, statusText) {
+      if ('mediaSession' in navigator && navigator.mediaSession.metadata) {
+        navigator.mediaSession.metadata.title = `${bpm} BPM · ${zoneName}`;
+        navigator.mediaSession.metadata.artist = statusText;
+      }
+    }
+
     // Distinct Web Audio Synthesizer
     function ensureAudio() {
       if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -416,19 +465,16 @@
     function playSoundType(kind) {
       try {
         if (kind === 'HIGH') {
-          // 1. Urgent rising double-chirp (ease off)
           playTone(988, 0, 0.14, 'triangle', 0.3);
           playTone(1318, 0.17, 0.22, 'triangle', 0.32);
           if (navigator.vibrate) navigator.vibrate([180, 90, 180]);
         } else if (kind === 'LOW') {
-          // 2. Deep falling double-boop (pick up pace)
           playTone(330, 0, 0.22, 'sine', 0.35);
           playTone(262, 0.25, 0.32, 'sine', 0.35);
           if (navigator.vibrate) navigator.vibrate([450]);
         } else if (kind === 'IN_ZONE') {
-          // 3. Clean harmonic confirmation chime (back in target zone)
-          playTone(587.33, 0, 0.14, 'sine', 0.28);     // D5
-          playTone(880.00, 0.14, 0.28, 'sine', 0.30);  // A5
+          playTone(587.33, 0, 0.14, 'sine', 0.28);
+          playTone(880.00, 0.14, 0.28, 'sine', 0.30);
           if (navigator.vibrate) navigator.vibrate([110]);
         } else if (kind === 'COUNTDOWN') {
           playTone(660, 0, 0.1, 'sine', 0.22);
@@ -454,7 +500,6 @@
       if (workoutMode === 'Z2') {
         return { min: 120, max: 132, checkLow: true, checkHigh: true, label: 'Target: 120 – 132 BPM (Strict Zone 2)' };
       }
-      // Zone 4 Interval Mode
       if (intervalRunning && intervalPhase === 'REST') {
         return { min: 0, max: 132, checkLow: false, checkHigh: true, label: 'REST: Recover below 132 BPM' };
       }
@@ -472,7 +517,6 @@
       document.getElementById('heroCard').style.borderColor = zone.color;
       document.getElementById('zoneRangeText').textContent = bounds.label;
 
-      // Determine new state
       let newState = 'IN_ZONE';
       if (bounds.checkHigh && bpm > bounds.max) {
         newState = 'HIGH';
@@ -480,22 +524,22 @@
         newState = 'LOW';
       }
 
-      // Update Banner Text
       const banner = document.getElementById('alertBanner');
+      let statusLabel = '';
       if (newState === 'HIGH') {
-        banner.textContent = `▲ TOO HIGH (>${bounds.max} BPM) — EASE OFF`;
+        statusLabel = `▲ TOO HIGH (>${bounds.max} BPM) — EASE OFF`;
         banner.style.color = '#fca5a5';
       } else if (newState === 'LOW') {
-        banner.textContent = `▼ TOO LOW (<${bounds.min} BPM) — PICK UP PACE`;
+        statusLabel = `▼ TOO LOW (<${bounds.min} BPM) — PICK UP PACE`;
         banner.style.color = '#93c5fd';
       } else {
-        banner.textContent = intervalPhase === 'REST' ? '✓ RECOVERING' : '✓ IN TARGET ZONE';
+        statusLabel = intervalPhase === 'REST' ? '✓ RECOVERING' : '✓ IN TARGET ZONE';
         banner.style.color = '#86efac';
       }
+      banner.textContent = statusLabel;
+      updateLockScreenMetadata(bpm, zone.name, statusLabel);
 
-      // Fire sound ONLY when state changes
       if (currentZoneState === 'SILENT_SYNC') {
-        // Silently absorb baseline state right after an interval phase chime
         currentZoneState = newState;
       } else if (newState !== currentZoneState) {
         currentZoneState = newState;
@@ -578,8 +622,8 @@
     });
 
     document.getElementById('preset4x4').addEventListener('click', () => {
-      document.getElementById('workSecInput').value = 240; // 4 mins
-      document.getElementById('restSecInput').value = 180; // 3 mins
+      document.getElementById('workSecInput').value = 240;
+      document.getElementById('restSecInput').value = 180;
       document.getElementById('roundsInput').value = 4;
       resetIntervalTimer();
     });
@@ -592,6 +636,7 @@
 
     document.getElementById('startIntervalBtn').addEventListener('click', () => {
       ensureAudio();
+      startBackgroundKeepAlive();
       if (intervalRunning) {
         clearInterval(intervalTick);
         intervalTick = null;
@@ -620,7 +665,6 @@
       intervalTick = setInterval(() => {
         phaseRemaining--;
 
-        // 3-2-1 countdown beeps before phase switch
         if (phaseRemaining > 0 && phaseRemaining <= 3 && document.getElementById('audioToggle').checked) {
           playSoundType('COUNTDOWN');
         }
@@ -680,6 +724,7 @@
     // Web Bluetooth Connection
     async function connectStrap() {
       ensureAudio();
+      startBackgroundKeepAlive();
       if (!navigator.bluetooth) {
         alert('Web Bluetooth requires Chrome over HTTPS or localhost.');
         return;
@@ -729,6 +774,7 @@
     // Simulator Mode
     document.getElementById('simBtn').addEventListener('click', () => {
       ensureAudio();
+      startBackgroundKeepAlive();
       if (simInterval) {
         clearInterval(simInterval);
         simInterval = null;
